@@ -128,7 +128,7 @@ end;
 
 function TSourceFileUsesClauseFormatter.GetCompDirectInInterface: Boolean;
 begin
-  Result := FImplInfo.HasCompilerDirective;
+  Result := FIntfInfo.HasCompilerDirective;
 end;
 
 function TSourceFileUsesClauseFormatter.GetScopeAliases: string;
