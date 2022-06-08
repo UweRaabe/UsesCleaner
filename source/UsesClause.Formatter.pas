@@ -34,7 +34,7 @@ type
     function CreateDelimitedSortedStrings: TStringList;
     function CreateMatcher(const AGroupName: string): IGroupNameMatcher;
     function CreateSortedStrings: TStringList;
-    function FindBestGroup(const UnitName: string; GroupNames: TStrings): string; overload;
+    function FindBestGroup(const UnitName: string; GroupNames: TStrings; StartIdx: Integer = 0): string; overload;
     procedure FindUnits(Path, UnitName: string);
     function GetGroupNames: string;
     function GetScopeAliases: string;
@@ -349,14 +349,14 @@ begin
   RemoveDoubles(UsesList);
 end;
 
-function TUsesClauseFormatter.FindBestGroup(const UnitName: string; GroupNames: TStrings): string;
+function TUsesClauseFormatter.FindBestGroup(const UnitName: string; GroupNames: TStrings; StartIdx: Integer = 0): string;
 var
   groupName: string;
   I: Integer;
   matcher: IGroupNameMatcher;
 begin
   result := '';
-  for I := 0 to GroupNames.Count - 1 do begin
+  for I := StartIdx to GroupNames.Count - 1 do begin
     groupName := GroupNames[I];
     if SameText(groupName, cRefUnitScopeNames) then begin
       result := FindBestGroup(UnitName, FUnitScopeNames);
@@ -522,8 +522,10 @@ begin
       matcher := CreateMatcher(groupName);
       for I := SourceReversed.Count - 1 downto 0 do begin
         if matcher.Matches(SourceReversed[I]) then begin
-          Target.Add(SourceReversed[I]);
-          SourceReversed.Delete(I);
+          if FindBestGroup(SourceReversed[I], GroupNames, J) = groupName then begin
+            Target.Add(SourceReversed[I]);
+            SourceReversed.Delete(I);
+          end;
         end;
       end;
     end;
