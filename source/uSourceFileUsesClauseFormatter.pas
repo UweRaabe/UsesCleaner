@@ -142,6 +142,7 @@ begin
   UsesHelper.UnitScopeNames := 'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell';
   UsesHelper.SearchPath := 'c:\Program Files (x86)\Embarcadero\Studio\19.0\lib\win32\release';
   UsesHelper.GroupNames := '<UnitScopeNames>';
+  UsesHelper.Unicode := False;  
 end;
 
 procedure TSourceFileUsesClauseFormatter.LoadConfigFile(const FileName: string);
@@ -155,6 +156,7 @@ begin
   try
     UsesHelper.Indentation := ini.ReadInteger('Settings', 'Indentation', UsesHelper.Indentation);
     UsesHelper.Compressed := ini.ReadBool('Settings', 'Compressed', UsesHelper.Compressed);
+    UsesHelper.Unicode := ini.ReadBool('Settings', 'Unicode', UsesHelper.Unicode);    
     UsesHelper.MaxLineLength := ini.ReadInteger('Settings', 'MaxLineLength', UsesHelper.MaxLineLength);
     UsesHelper.SearchPath := ini.ReadString('Settings', 'SearchPath', UsesHelper.SearchPath);
     UsesHelper.UnitAliases := ini.ReadString('Settings', 'UnitAliases', UsesHelper.UnitAliases);
@@ -177,7 +179,10 @@ end;
 
 procedure TSourceFileUsesClauseFormatter.SaveToFile(const FileName: string);
 begin
-  TFile.WriteAllText(FileName, FFileContent, TEncoding.ANSI);
+  if FUsesHelper.Unicode then
+     TFile.WriteAllText(FileName, FFileContent, TEncoding.UTF8)
+  else
+     TFile.WriteAllText(FileName, FFileContent, TEncoding.ANSI);
 end;
 
 procedure TSourceFileUsesClauseFormatter.WriteInterfaceUses(Source: TStrings);
