@@ -18,6 +18,7 @@ type
   TUsesClauseFormatter = class
   private
     FCompressed: Boolean;
+    FUnicode: Boolean;    
     FIndentation: Integer;
     FMaxLineLength: Integer;
     FFoundUnits: TStringList;
@@ -70,6 +71,7 @@ type
     procedure RemoveUnitScopeNames(UnitNames: TStrings);
     procedure ResolveAliases(UsesList: TUsesList);
     property Compressed: Boolean read FCompressed write FCompressed;
+    property Unicode: Boolean read FUnicode write FUnicode;    
     property GroupNames: string read GetGroupNames write SetGroupNames;
     property Groups: TStringList read FGroups;
     property Indentation: Integer read FIndentation write FIndentation;
