@@ -4,7 +4,7 @@ interface
 
 uses
   System.Classes, System.Generics.Collections,
-  UsesClause.Types, UsesClause.Formatter;
+  UsesClause.Types, UsesClause.Formatter, System.SysUtils;
 
 type
   TSourceFileUsesClauseFormatter = class
@@ -29,8 +29,8 @@ type
     procedure FormatUsesClauses(const FileName: string); overload;
     procedure FormatUsesClauses(const SourceName, TargetName: string); overload;
     procedure LoadConfigFile(const FileName: string);
-    procedure LoadFromFile(const FileName: string);
-    procedure SaveToFile(const FileName: string);
+    procedure LoadFromFile(const FileName: string; var Encoding: TEncoding);
+    procedure SaveToFile(const FileName: string; Encoding: TEncoding);
     property CompDirectInImplementation: Boolean read GetCompDirectInImplementation;
     property CompDirectInInterface: Boolean read GetCompDirectInInterface;
     property CondInUses: TStrings read FCondInUses;
@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.StrUtils, System.Types, System.IOUtils, System.IniFiles;
+  System.StrUtils, System.Types, System.IOUtils, System.IniFiles;
 
 constructor TSourceFileUsesClauseFormatter.Create;
 begin
@@ -102,6 +102,7 @@ end;
 
 procedure TSourceFileUsesClauseFormatter.FormatUsesClauses(const SourceName, TargetName: string);
 var
+  Encoding: TEncoding;
   saveCompressed: Boolean;
   saveGroupNames: string;
 begin
@@ -112,9 +113,16 @@ begin
       UsesHelper.Compressed := False;
       UsesHelper.GroupNames := '';
     end;
-    LoadFromFile(SourceName);
+    { are we going to force any encoding on SaveToFile? }
+    case IndexText(UsesHelper.EncodingName, ['ANSI', 'UTF8']) of
+      0: Encoding := TEncoding.ANSI;
+      1: Encoding := TEncoding.UTF8;
+    else
+      Encoding := nil; { take the current encoding of the file }
+    end;
+    LoadFromFile(SourceName, Encoding);
     FormatUsesClauses;
-    SaveToFile(TargetName);
+    SaveToFile(TargetName, Encoding);
   finally
     UsesHelper.Compressed := saveCompressed;
     UsesHelper.GroupNames := saveGroupNames;
@@ -155,6 +163,7 @@ begin
   try
     UsesHelper.Indentation := ini.ReadInteger('Settings', 'Indentation', UsesHelper.Indentation);
     UsesHelper.Compressed := ini.ReadBool('Settings', 'Compressed', UsesHelper.Compressed);
+    UsesHelper.EncodingName := ini.ReadString('Settings', 'Encoding', UsesHelper.EncodingName);
     UsesHelper.MaxLineLength := ini.ReadInteger('Settings', 'MaxLineLength', UsesHelper.MaxLineLength);
     UsesHelper.SearchPath := ini.ReadString('Settings', 'SearchPath', UsesHelper.SearchPath);
     UsesHelper.UnitAliases := ini.ReadString('Settings', 'UnitAliases', UsesHelper.UnitAliases);
@@ -166,8 +175,33 @@ begin
   end;
 end;
 
-procedure TSourceFileUsesClauseFormatter.LoadFromFile(const FileName: string);
+procedure TSourceFileUsesClauseFormatter.LoadFromFile(const FileName: string; var Encoding: TEncoding);
+
+  function GetEncoding(const FileName: string): TEncoding;
+  const
+    cMaxPreambleLen = 4;
+  var
+    bytes: TBytes;
+    len: Integer;
+    stream: TStream;
+  begin
+    Result := nil;
+    stream := TFileStream.Create(FileName, fmOpenRead);
+    try
+      SetLength(bytes, CMaxPreambleLen);
+      { File content could be shorter than cMaxPreambleLen.
+        This is very theoretical, as no valid Delphi unit can be 3 characters or less. }
+      len := Stream.Read(bytes, Length(bytes));
+      SetLength(bytes, len);
+      TEncoding.GetBufferEncoding(bytes, Result);
+    finally
+      stream.Free;
+    end;
+  end;
+
 begin
+  if Encoding = nil then
+    Encoding := GetEncoding(FileName);
   FFileContent := TFile.ReadAllText(FileName);
   BuildUsesList;
   if CompDirectInImplementation or CompDirectInInterface then begin
@@ -175,9 +209,9 @@ begin
   end;
 end;
 
-procedure TSourceFileUsesClauseFormatter.SaveToFile(const FileName: string);
+procedure TSourceFileUsesClauseFormatter.SaveToFile(const FileName: string; Encoding: TEncoding);
 begin
-  TFile.WriteAllText(FileName, FFileContent, TEncoding.ANSI);
+  TFile.WriteAllText(FileName, FFileContent, Encoding);
 end;
 
 procedure TSourceFileUsesClauseFormatter.WriteInterfaceUses(Source: TStrings);

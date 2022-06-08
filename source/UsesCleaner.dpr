@@ -80,10 +80,14 @@ begin
 end;
 
 procedure TUsesCleaner.PrepareHandler;
+var
+  encodingName: string;
 begin
   inherited;
   FIgnore.CommaText := SwitchValue('ignore');
   FUsesManager.LoadConfigFile(SwitchValue('c', TPath.ChangeExtension(ExeName, '.cfg')));
+  if FindCmdLineSwitch('encoding', encodingName) then
+    FUsesManager.UsesHelper.EncodingName := encodingName;
 end;
 
 procedure TUsesCleaner.ShowCmdLine;
