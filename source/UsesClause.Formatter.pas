@@ -150,6 +150,18 @@ type
     procedure VisitUnitName(var Value: string; Mode: TClosingMode); override;
   end;
 
+  TFlixWriter = class(TUsesInfoWriter)
+  private
+    FGroup: string;
+    FLastMode: TClosingMode;
+    function CheckGroup(const Value: string): Boolean;
+  protected
+    procedure VisitDirective(const Value: string); override;
+    procedure VisitUnitName(var Value: string; Mode: TClosingMode); override;
+  public
+    procedure Prepare; override;
+  end;
+
 type
   TGroupNameMatcher = class(TInterfacedObject, IGroupNameMatcher)
   private
@@ -265,7 +277,7 @@ begin
   if Compressed then
     cls := TCompressedWriter
   else
-    cls := TFlatWriter;
+    cls := TFlixWriter;
   vis := cls.Create(Self, Target);
   try
     vis.Execute(UsesList);
@@ -876,6 +888,43 @@ var
   idx: Integer;
 begin
   Result := List.Find(AUnitName, idx);
+end;
+
+function TFlixWriter.CheckGroup(const Value: string): Boolean;
+begin
+  Result := (FGroup = '*') or SameText(FGroup, Value);
+end;
+
+procedure TFlixWriter.Prepare;
+begin
+  inherited;
+  FGroup := '*';
+  FLastMode := cmNone;
+end;
+
+procedure TFlixWriter.VisitDirective(const Value: string);
+begin
+  if Value > '' then begin
+    FGroup := '*';
+    Target.Add(Indent + Value);
+  end;
+end;
+
+procedure TFlixWriter.VisitUnitName(var Value: string; Mode: TClosingMode);
+var
+  newGroup: string;
+begin
+  newGroup := Formatter.FindBestGroup(Value);
+  if not CheckGroup(newGroup) then begin
+    Target.Add('');
+  end;
+  Target.Add(Indent + Format('%-2s', [cEndChar[FLastMode]]) + Value);
+  if Mode = cmLast then begin
+    Target.Add('');
+    Target.Add(Indent + cEndChar[Mode]);
+  end;
+  FLastMode := Mode;
+  FGroup := newGroup;
 end;
 
 end.
