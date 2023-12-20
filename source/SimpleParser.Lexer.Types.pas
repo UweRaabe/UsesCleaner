@@ -44,6 +44,7 @@ type
     ptAbstract,
     ptAdd,
     ptAddressOp,
+    ptAlign,
     ptAmpersand,
     ptAnd,
     ptAnsiComment,
@@ -208,6 +209,7 @@ type
     ptRoundOpen,
     ptRunError,
     ptSafeCall,
+    ptScopedEnumsDirect,
     ptSealed,
     ptSemiColon,
     ptSet,
@@ -271,7 +273,8 @@ type
   EIncludeError = class(Exception);
   IIncludeHandler = interface
     ['{C5F20740-41D2-43E9-8321-7FE5E3AA83B6}']
-    function GetIncludeFileContent(const FileName: string): string;
+    function GetIncludeFileContent(const ParentFileName, IncludeName: string;
+      out Content: string; out FileName: string): Boolean;
   end;
 
 function TokenName(Value: TptTokenKind): string;
@@ -308,8 +311,8 @@ begin
     ptEndIfDirect,
     ptIfOptDirect,
     ptDefineDirect,
+    ptScopedEnumsDirect,
     ptUndefDirect];
 end;
 
 end.
-
