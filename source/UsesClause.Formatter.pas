@@ -89,7 +89,6 @@ uses
 
 type
   TUsesInfoHandler = class(TUsesInfoVisitor)
-
   private
     FFormatter: TUsesClauseFormatter;
   public
