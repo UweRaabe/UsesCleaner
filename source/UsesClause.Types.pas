@@ -65,10 +65,10 @@ type
 type
   TUsesInfoVisitor = class
   protected
-    procedure VisitDirective(const Value: string); virtual; abstract;
+    procedure VisitDirective(const Value: string; DirectiveIndentLevel, UsesIndentLevel: Integer); virtual; abstract;
     procedure VisitUnitName(var Value: string; Mode: TClosingMode); virtual; abstract;
   public
-    procedure VisitList(List: TUsesList; Mode: TClosingMode = cmLast);
+    procedure VisitList(List: TUsesList; IndentLevel: Integer = 0; Mode: TClosingMode = cmLast);
   end;
 
 type
@@ -243,15 +243,17 @@ begin
         if InUses then begin
           directive := parser.Token;
           case parser.TokenID of
-            ptIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect: begin
+            ptIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect,
+            ptRegionDirect: begin
               BeginDirective(directive);
             end;
             ptElseDirect, ptElseIfDirect: begin
               ElseDirective(directive);
             end;
-            ptEndIfDirect, ptIfEndDirect: begin
+            ptEndIfDirect, ptIfEndDirect,
+            ptEndRegionDirect: begin
               EndDirective(directive);
-              if pendingClose then begin
+              if not IsInDirective and pendingClose then begin
                 InUses := False;
                 FUsesInfo[Section].EndOfUses := Parser.RunPos;
                 if Section = sImplementation then
@@ -342,7 +344,7 @@ begin
   FEndOfUses := FEndOfUses + Value;
 end;
 
-procedure TUsesInfoVisitor.VisitList(List: TUsesList; Mode: TClosingMode = cmLast);
+procedure TUsesInfoVisitor.VisitList(List: TUsesList; IndentLevel: Integer = 0; Mode: TClosingMode = cmLast);
 var
   I: Integer;
   last: TClosingMode;
@@ -351,7 +353,7 @@ var
 begin
   if List = nil then Exit;
 
-  VisitDirective(List.DirectiveBegin);
+  VisitDirective(List.DirectiveBegin, IndentLevel, IndentLevel + 1);
 
   lastIndex := List.Count - 1;
   for I := 0 to lastIndex do begin
@@ -360,7 +362,7 @@ begin
     else
       last := Mode;
     if List.IsSubList(I) then begin
-      VisitList(List.SubList[I], last);
+      VisitList(List.SubList[I], IndentLevel + 1, last);
     end
     else begin
       S := List[I];
@@ -368,8 +370,9 @@ begin
       List[I] := S;
     end;
   end;
-  VisitList(List.ElseList, Mode);
-  VisitDirective(List.DirectiveEnd);
+
+  VisitList(List.ElseList, IndentLevel, Mode);
+  VisitDirective(List.DirectiveEnd, IndentLevel, IndentLevel);
 end;
 
 end.

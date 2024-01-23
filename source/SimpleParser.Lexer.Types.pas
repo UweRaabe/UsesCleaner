@@ -102,6 +102,7 @@ type
     ptElseDirect,
     ptEnd,
     ptEndIfDirect,
+    ptEndRegionDirect,
     ptEqual,
     ptError,
     ptExcept,
@@ -197,6 +198,7 @@ type
     ptReal48,
     ptRecord,
     ptReference,
+    ptRegionDirect,
     ptRegister,
     ptReintroduce,
     ptRemove,
@@ -312,7 +314,10 @@ begin
     ptIfOptDirect,
     ptDefineDirect,
     ptScopedEnumsDirect,
-    ptUndefDirect];
+    ptUndefDirect,
+    ptRegionDirect,
+    ptEndRegionDirect
+  ];
 end;
 
 end.

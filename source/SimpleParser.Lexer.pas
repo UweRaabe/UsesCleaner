@@ -120,6 +120,8 @@ type
     FOnIfEndDirect: TDirectiveEvent;
     FOnElseIfDirect: TDirectiveEvent;
     FOnUnDefDirect: TDirectiveEvent;
+    FOnRegionDirect: TDirectiveEvent;
+    FOnEndRegionDirect: TDirectiveEvent;
     FDirectiveParamOrigin: PChar;
     FAsmCode: Boolean;
     FDefines: TArray<string>;
@@ -360,6 +362,8 @@ type
     property OnElseIfDirect: TDirectiveEvent read FOnElseIfDirect write FOnElseIfDirect;
     property OnResourceDirect: TDirectiveEvent read FOnResourceDirect write FOnResourceDirect;
     property OnUnDefDirect: TDirectiveEvent read FOnUnDefDirect write FOnUnDefDirect;
+    property OnRegionDirect: TDirectiveEvent read FOnRegionDirect write FOnRegionDirect;
+    property OnEndRegionDirect: TDirectiveEvent read FOnEndRegionDirect write FOnEndRegionDirect;
     property AsmCode: Boolean read FAsmCode write FAsmCode;
     property DirectiveParamOrigin: PChar read FDirectiveParamOrigin;
     property UseDefines: Boolean read FUseDefines write FUseDefines;
@@ -1654,6 +1658,16 @@ begin
       begin
         UpdateScopedEnums;
       end;
+    PtRegionDirect:
+      begin
+        if Assigned(FOnRegionDirect) then
+          FOnRegionDirect(Self);
+      end;
+    PtEndRegionDirect:
+      begin
+        if Assigned(FOnEndRegionDirect) then
+          FOnEndRegionDirect(Self);
+      end;
     PtUndefDirect:
       begin
         if FUseDefines and (FDefineStack = 0) then
@@ -1894,8 +1908,8 @@ function TmwBasePasLex.IsIdentifiers(AChar: Char): Boolean;
 begin
   // assuming Delphi identifier may include letters, digits, underscore symbol
   // and any character over 127 except surrogates
-  Result := TCharacter.IsLetterOrDigit(AChar) or (AChar = '_')
-    or ((Ord(AChar) > 127) and not TCharacter.IsHighSurrogate(AChar) and not TCharacter.IsLowSurrogate(AChar));
+  Result := AChar.IsLetterOrDigit or (AChar = '_')
+    or ((Ord(AChar) > 127) and not AChar.IsHighSurrogate and not AChar.IsLowSurrogate);
 end;
 
 procedure TmwBasePasLex.LFProc;
@@ -2548,6 +2562,12 @@ begin
     68:
       if KeyComp('INCLUDE') then
         Result := ptIncludeDirect else
+      if KeyComp('REGION') then
+        Result := ptRegionDirect else
+        Result := ptCompDirect;
+    91:
+      if KeyComp('ENDREGION') then
+        Result := ptEndRegionDirect else
         Result := ptCompDirect;
     104:
       if KeyComp('Resource') then
@@ -2929,9 +2949,10 @@ end;
 
 function TmwBasePasLex.GetIsCompilerDirective: Boolean;
 begin
-  Result := FTokenID in [ptCompDirect, ptDefineDirect, ptElseDirect,
+  Result := FTokenID in [ptCompDirect, ptDefineDirect, ptIfDirect, ptElseDirect,
     ptEndIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect,
-    ptIncludeDirect, ptResourceDirect, ptScopedEnumsDirect, ptUndefDirect];
+    ptIncludeDirect, ptResourceDirect, ptScopedEnumsDirect, ptUndefDirect,
+    ptRegionDirect, ptEndRegionDirect];
 end;
 
 function TmwBasePasLex.GetGenID: TptTokenKind;
