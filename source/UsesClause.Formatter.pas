@@ -104,7 +104,7 @@ type
   private
     FList: TStringList;
   protected
-    procedure VisitDirective(const Value: string); override;
+    procedure VisitDirective(const Value: string; DirectiveIndentLevel, UsesIndentLevel: Integer); override;
     procedure VisitUnitName(var Value: string; Mode: TClosingMode); override;
   public
     constructor Create(AFormatter: TUsesClauseFormatter);
@@ -116,12 +116,13 @@ type
   TUsesInfoWriterClass = class of TUsesInfoWriter;
   TUsesInfoWriter = class(TUsesInfoHandler)
   private
-    FIndent: string;
+    FUsesIndentLevel: Integer;
     FTarget: TStrings;
   protected
   const
     cEndChar: array[TClosingMode] of string = (',', ';', '');
-    property Indent: string read FIndent;
+    function Indent(Level: Integer): string;
+    function UsesIndent: string;
   public
     constructor Create(AFormatter: TUsesClauseFormatter; ATarget: TStrings);
     procedure Prepare; override;
@@ -136,7 +137,7 @@ type
     function CheckGroup(const Value: string): Boolean;
     procedure FlushLine;
   protected
-    procedure VisitDirective(const Value: string); override;
+    procedure VisitDirective(const Value: string; DirectiveIndentLevel, UsesIndentLevel: Integer); override;
     procedure VisitUnitName(var Value: string; Mode: TClosingMode); override;
   public
     procedure Finish; override;
@@ -145,7 +146,7 @@ type
 
   TFlatWriter = class(TUsesInfoWriter)
   protected
-    procedure VisitDirective(const Value: string); override;
+    procedure VisitDirective(const Value: string; DirectiveIndentLevel, UsesIndentLevel: Integer); override;
     procedure VisitUnitName(var Value: string; Mode: TClosingMode); override;
   end;
 
@@ -703,7 +704,7 @@ end;
 procedure TCompressedWriter.FlushLine;
 begin
   if FLine > '' then begin
-    Target.Add(indent + FLine);
+    Target.Add(UsesIndent + FLine);
   end;
   FLine := '';
 end;
@@ -716,12 +717,17 @@ begin
   FGroup := '*';
 end;
 
-procedure TCompressedWriter.VisitDirective(const Value: string);
+procedure TCompressedWriter.VisitDirective(const Value: string;
+  DirectiveIndentLevel, UsesIndentLevel: Integer);
 begin
   if Value > '' then begin
     FlushLine;
+    FUsesIndentLevel := UsesIndentLevel - 1;
+    if FUsesIndentLevel <= 0 then
+      FUsesIndentLevel := 1;
+    FMaxLen := Formatter.MaxLineLength - FUsesIndentLevel * Formatter.Indentation;
     FGroup := '*';
-    Target.Add(Indent + Value);
+    Target.Add(Indent(DirectiveIndentLevel - 1) + Value);
   end;
 end;
 
@@ -757,22 +763,38 @@ begin
   FTarget := ATarget;
 end;
 
+function TUsesInfoWriter.Indent(Level: Integer): string;
+begin
+  Result := StringOfChar(' ', Level * Formatter.Indentation);
+end;
+
+function TUsesInfoWriter.UsesIndent: string;
+begin
+  Result := Indent(FUsesIndentLevel);
+end;
+
 procedure TUsesInfoWriter.Prepare;
 begin
   inherited;
-  FIndent := StringOfChar(' ', Formatter.Indentation);
+  FUsesIndentLevel := 1;
   Target.Add('uses');
 end;
 
-procedure TFlatWriter.VisitDirective(const Value: string);
+procedure TFlatWriter.VisitDirective(const Value: string;
+  DirectiveIndentLevel, UsesIndentLevel: Integer);
 begin
   if Value > '' then
-    Target.Add(Indent + Value);
+  begin
+    FUsesIndentLevel := UsesIndentLevel - 1;
+    if FUsesIndentLevel <= 0 then
+      FUsesIndentLevel := 1;
+    Target.Add(Indent(DirectiveIndentLevel - 1) + Value);
+  end;
 end;
 
 procedure TFlatWriter.VisitUnitName(var Value: string; Mode: TClosingMode);
 begin
-  Target.Add(Indent + Value + cEndChar[Mode]);
+  Target.Add(UsesIndent + Value + cEndChar[Mode]);
 end;
 
 constructor TUsesListGrouper.Create(AFormatter: TUsesClauseFormatter);
@@ -792,7 +814,8 @@ begin
 
 end;
 
-procedure TUsesListGrouper.VisitDirective(const Value: string);
+procedure TUsesListGrouper.VisitDirective(const Value: string;
+  DirectiveIndentLevel, UsesIndentLevel: Integer);
 begin
 
 end;
