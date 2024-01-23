@@ -243,13 +243,15 @@ begin
         if InUses then begin
           directive := parser.Token;
           case parser.TokenID of
-            ptIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect: begin
+            ptIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect,
+            ptRegionDirect: begin
               BeginDirective(directive);
             end;
             ptElseDirect, ptElseIfDirect: begin
               ElseDirective(directive);
             end;
-            ptEndIfDirect, ptIfEndDirect: begin
+            ptEndIfDirect, ptIfEndDirect,
+            ptEndRegionDirect: begin
               EndDirective(directive);
               if pendingClose then begin
                 InUses := False;
