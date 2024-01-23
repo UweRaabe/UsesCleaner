@@ -253,7 +253,7 @@ begin
             ptEndIfDirect, ptIfEndDirect,
             ptEndRegionDirect: begin
               EndDirective(directive);
-              if pendingClose then begin
+              if not IsInDirective and pendingClose then begin
                 InUses := False;
                 FUsesInfo[Section].EndOfUses := Parser.RunPos;
                 if Section = sImplementation then
