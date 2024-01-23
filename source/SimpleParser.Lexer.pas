@@ -2949,7 +2949,7 @@ end;
 
 function TmwBasePasLex.GetIsCompilerDirective: Boolean;
 begin
-  Result := FTokenID in [ptCompDirect, ptDefineDirect, ptElseDirect,
+  Result := FTokenID in [ptCompDirect, ptDefineDirect, ptIfDirect, ptElseDirect,
     ptEndIfDirect, ptIfDefDirect, ptIfNDefDirect, ptIfOptDirect,
     ptIncludeDirect, ptResourceDirect, ptScopedEnumsDirect, ptUndefDirect,
     ptRegionDirect, ptEndRegionDirect];
