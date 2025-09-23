@@ -6,9 +6,6 @@ uses
   System.Classes, System.SysUtils;
 
 resourcestring
-  SUsage = 'usage';
-  SConverting = 'converting';
-  SCanNotCreateFolder = 'can not create folder';
   SPressEnterToContinue = 'press <enter> to continue...';
 
 type
