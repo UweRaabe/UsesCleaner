@@ -6,27 +6,31 @@ uses
   System.Classes, System.SysUtils,
   uCmdLineHandler;
 
+resourcestring
+  SMayContainWildcards = 'may contain wildcards';
+  SUsage = 'usage';
+  SConverting = 'converting';
+  SCanNotCreateFolder = 'can not create folder';
+
 type
   TFileHandlerCmdLine = class(TCmdLineHandler)
+  private
+    FLogPrefix: string;
   protected
     procedure InternalHandleCmdLine; override;
     procedure HandleFile(const SourceName, TargetName: string); virtual;
     function MakeTargetName(const SourceName, BasePath, TargetPath: string): string; virtual;
     procedure ShowCmdLine; override;
     procedure SortFiles(AFiles: TStringList); virtual;
+  public
+    constructor Create; override;
+    property LogPrefix: string read FLogPrefix write FLogPrefix;
   end;
 
 implementation
 
 uses
   System.Types, System.IOUtils;
-
-resourcestring
-  SMayContainWildcards = 'may contain wildcards';
-  SUsage = 'usage';
-  SConverting = 'converting';
-  SCanNotCreateFolder = 'can not create folder';
-  SPressEnterToContinue = 'press <enter> to continue...';
 
 procedure TFileHandlerCmdLine.InternalHandleCmdLine;
 var
@@ -60,11 +64,16 @@ begin
         SortFiles(files);
         for SourceName in files do begin
           TargetName := MakeTargetName(SourceName, IncludeTrailingPathDelimiter(FilePath), OutPath);
-          TargetPath := TPath.GetDirectoryName(TargetName);
-          if ForceDirectories(TargetPath) then
-            HandleFile(SourceName, TargetName)
-          else
-            LogError(SCanNotCreateFolder + ': ' + TargetPath);
+          if TargetName > '' then begin
+            TargetPath := TPath.GetDirectoryName(TargetName);
+            if TargetPath.IsEmpty or ForceDirectories(TargetPath) then
+              HandleFile(SourceName, TargetName)
+            else
+              LogError(SCanNotCreateFolder + ': ' + TargetPath);
+          end
+          else begin
+            LogLine('skipped ' + SourceName + ' (no target)');
+          end;
         end;
       except
         on E: Exception do
@@ -76,9 +85,15 @@ begin
   end;
 end;
 
+constructor TFileHandlerCmdLine.Create;
+begin
+  inherited;
+  FLogPrefix := SConverting;
+end;
+
 procedure TFileHandlerCmdLine.HandleFile(const SourceName, TargetName: string);
 begin
-  LogLine(SConverting + ': ' + SourceName);
+  LogLine(LogPrefix + ': ' + SourceName);
 end;
 
 function TFileHandlerCmdLine.MakeTargetName(const SourceName, BasePath, TargetPath: string): string;

@@ -1894,8 +1894,13 @@ function TmwBasePasLex.IsIdentifiers(AChar: Char): Boolean;
 begin
   // assuming Delphi identifier may include letters, digits, underscore symbol
   // and any character over 127 except surrogates
+{$IFDEF SUPPORTS_INTRINSIC_HELPERS}
+  Result := AChar.IsLetterOrDigit or (AChar = '_')
+    or ((Ord(AChar) > 127) and not AChar.IsHighSurrogate and not AChar.IsLowSurrogate);
+{$ELSE}
   Result := TCharacter.IsLetterOrDigit(AChar) or (AChar = '_')
     or ((Ord(AChar) > 127) and not TCharacter.IsHighSurrogate(AChar) and not TCharacter.IsLowSurrogate(AChar));
+{$ENDIF}
 end;
 
 procedure TmwBasePasLex.LFProc;
@@ -2284,6 +2289,13 @@ begin
 end;
 
 procedure TmwBasePasLex.StringProc;
+const
+  cQuote = #39;
+  cLF = #10;
+  cCR = #13;
+  cNul = #0;
+  cTab = #9;
+  cSpace = #32;
 var
   StartQuoteCount, EndQuoteCount: Integer;
   NewLine: Boolean;
@@ -2291,7 +2303,7 @@ begin
   FTokenID := ptStringConst;
 
   StartQuoteCount := 0;
-  while FBuffer.Buf[FBuffer.Run] = #39 do
+  while FBuffer.Buf[FBuffer.Run] = cQuote do
   begin
     StartQuoteCount := StartQuoteCount + 1;
     Inc(FBuffer.Run);
@@ -2300,36 +2312,36 @@ begin
   if StartQuoteCount mod 2 = 0 then
     Exit;
 
-  if (StartQuoteCount > 1) and ((FBuffer.Buf[FBuffer.Run] = #10) or (FBuffer.Buf[FBuffer.Run] = #13)) then
+  if (StartQuoteCount > 1) and ((FBuffer.Buf[FBuffer.Run] = cLF) or (FBuffer.Buf[FBuffer.Run] = cCR)) then
   begin // multiline string
     NewLine := False;
     repeat
       case FBuffer.Buf[FBuffer.Run] of
-        #10:
+        cLF:
           begin
             NewLine := True;
             Inc(FBuffer.Run);
             Inc(FBuffer.LineNumber);
             FBuffer.LinePos := FBuffer.Run;
           end;
-        #13:
+        cCR:
           begin
             NewLine := True;
             Inc(FBuffer.Run);
-            if FBuffer.Buf[FBuffer.Run] = #10 then Inc(FBuffer.Run);
+            if FBuffer.Buf[FBuffer.Run] = cLF then Inc(FBuffer.Run);
             Inc(FBuffer.LineNumber);
             FBuffer.LinePos := FBuffer.Run;
           end;
-        #0:
+        cNul:
           begin
             if Assigned(FOnMessage) then
               FOnMessage(Self, meError, 'Unterminated string', PosXY.X, PosXY.Y);
             Break;
           end;
-        #39:
+        cQuote:
           begin
             EndQuoteCount := 0;
-            while (FBuffer.Buf[FBuffer.Run] = #39) do
+            while (FBuffer.Buf[FBuffer.Run] = cQuote) do
             begin
               Inc(EndQuoteCount);
               Inc(FBuffer.Run);
@@ -2343,7 +2355,7 @@ begin
             NewLine := False;
           end;
         else
-          if NewLine and (FBuffer.Buf[FBuffer.Run] <> #9) and (FBuffer.Buf[FBuffer.Run] <> #32) then
+          if NewLine and (FBuffer.Buf[FBuffer.Run] <> cTab) and (FBuffer.Buf[FBuffer.Run] <> cSpace) then
             NewLine := False;
       end;
       Inc(FBuffer.Run);
@@ -2354,22 +2366,22 @@ begin
     repeat
       Inc(FBuffer.Run);
       case FBuffer.Buf[FBuffer.Run] of
-        #0, #10, #13:
+        cNul, cLF, cCR:
           begin
             if Assigned(FOnMessage) then
               FOnMessage(Self, meError, 'Unterminated string', PosXY.X, PosXY.Y);
             Break;
           end;
-        #39:
+        cQuote:
           begin
-            while (FBuffer.Buf[FBuffer.Run] = #39) and (FBuffer.Buf[FBuffer.Run + 1] = #39) do
+            while (FBuffer.Buf[FBuffer.Run] = cQuote) and (FBuffer.Buf[FBuffer.Run + 1] = cQuote) do
             begin
               Inc(FBuffer.Run, 2);
             end;
           end;
       end;
-    until FBuffer.Buf[FBuffer.Run] = #39;
-    if FBuffer.Buf[FBuffer.Run] = #39 then
+    until FBuffer.Buf[FBuffer.Run] = cQuote;
+    if FBuffer.Buf[FBuffer.Run] = cQuote then
     begin
       Inc(FBuffer.Run);
       if TokenLen = 3 then

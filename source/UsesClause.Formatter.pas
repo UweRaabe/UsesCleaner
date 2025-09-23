@@ -25,6 +25,7 @@ type
     FGroupNames: TStringList;
     FGroups: TStringList;
     FHasComments: Boolean;
+    FModuleUnits: TStrings;
     FScopeAliases: TStringList;
     FSearchPath: TStringList;
     FUnitAliases: TStringList;
@@ -42,12 +43,11 @@ type
     function GetSearchPath: string;
     function GetUnitAliases: string;
     function GetUnitScopeNames: string;
-    procedure InternalGroupUnitNames(SourceReversed, Target, GroupNames: TStrings); overload;
-    procedure InternalGroupUnitNames(SourceReversed, Target: TUsesList; GroupNames: TStrings); overload;
-    procedure InternalGroupUnitNames(SourceReversed, Target: TUsesList; const GroupName: string); overload;
+    procedure InternalGroupUnitNames(SourceReversed, Target, GroupNames: TStrings);
     function IsUnitInSearchPath(var UnitName: string): Boolean;
     procedure RemoveDoubles(UsesList: TUsesList);
     procedure SetGroupNames(const Value: string);
+    procedure SetModuleUnits(const Value: TStrings);
     procedure SetScopeAliases(const Value: string);
     procedure SetSearchPath(const Value: string);
     procedure SetUnitAliases(const Value: string);
@@ -62,7 +62,8 @@ type
     destructor Destroy; override;
     procedure AddSearchPath(const APath: string);
     procedure CompressUses(UsesList: TUsesList; Target: TStrings);
-    procedure Execute(UsesInfo: TUsesInfo; Target: TStrings);
+    procedure Execute(UsesInfo: TUsesInfo; Target: TStrings); overload;
+    procedure Execute(Code, Target: TStrings); overload;
     procedure ExpandUnitScopeNames(UsesList: TUsesList);
     function FindBestGroup(const UnitName: string): string; overload;
     procedure GroupUnitNames(UnitNames: TStrings); overload;
@@ -76,6 +77,7 @@ type
     property Groups: TStringList read FGroups;
     property Indentation: Integer read FIndentation write FIndentation;
     property MaxLineLength: Integer read FMaxLineLength write FMaxLineLength;
+    property ModuleUnits: TStrings read FModuleUnits write SetModuleUnits;
     property ScopeAliases: string read GetScopeAliases write SetScopeAliases;
     property SearchPath: string read GetSearchPath write SetSearchPath;
     property UnitAliases: string read GetUnitAliases write SetUnitAliases;
@@ -86,6 +88,20 @@ implementation
 
 uses
   System.SysUtils, System.StrUtils, System.Masks;
+
+{$IF CompilerVersion <= 30.0 }
+type
+  TStringsHelper = class helper for TStrings
+  public
+    function AddPair(const Name, Value: string): TStrings;
+  end;
+
+function TStringsHelper.AddPair(const Name, Value: string): TStrings;
+begin
+  Add(Name + NameValueSeparator + Value);
+  Result := Self;
+end;
+{$ENDIF}
 
 type
   TUsesInfoHandler = class(TUsesInfoVisitor)
@@ -205,6 +221,7 @@ begin
   FSearchPath := CreateDelimitedStrings;
   FScopeAliases := CreateDelimitedSortedStrings;
   FGroups := TStringList.Create();
+  FModuleUnits := TStringList.Create;
 
   FIndentation := 2;
   FMaxLineLength := 80;
@@ -213,6 +230,7 @@ end;
 
 destructor TUsesClauseFormatter.Destroy;
 begin
+  FModuleUnits.Free;
   FGroups.Free;
   FScopeAliases.Free;
   FSearchPath.Free;
@@ -315,6 +333,19 @@ begin
   CompressUses(UsesInfo.UsesList, Target);
 end;
 
+procedure TUsesClauseFormatter.Execute(Code, Target: TStrings);
+var
+  reader: TUsesInfoReader;
+begin
+  reader := TUsesInfoReader.Create;
+  try
+    reader.LoadSource(code.Text);
+    Execute(reader.IntfUses, Target);
+  finally
+    reader.Free;
+  end;
+end;
+
 procedure TUsesClauseFormatter.ExpandUnitScopeNames(UsesList: TUsesList);
 { Expands UsesList with UnitScopeNames.
   The first unit scope name that results in a unit found in the search path is prefixed to the unit name. }
@@ -332,6 +363,8 @@ begin
     end
     else begin
       unitName := UsesList[I];
+      { skip module units }
+      if ModuleUnits.IndexOf(unitName) >= 0 then Continue;
       newUnitName := unitName;
       if IsUnitInSearchPath(newUnitName) then begin
         UsesList[I] := newUnitName;
@@ -533,35 +566,6 @@ begin
   end;
 end;
 
-procedure TUsesClauseFormatter.InternalGroupUnitNames(SourceReversed, Target: TUsesList; GroupNames: TStrings);
-var
-  J: Integer;
-begin
-  for J := 0 to GroupNames.Count - 1 do begin
-    InternalGroupUnitNames(SourceReversed, Target, GroupNames[J]);
-  end;
-end;
-
-procedure TUsesClauseFormatter.InternalGroupUnitNames(SourceReversed, Target: TUsesList; const GroupName: string);
-var
-  I: Integer;
-  S: string;
-begin
-  if SameText(GroupName, cRefUnitScopeNames) then begin
-    InternalGroupUnitNames(SourceReversed, Target, FUnitScopeNames);
-  end
-  else begin
-    S := GroupName + '.';
-    for I := SourceReversed.Count - 1 downto 0 do begin
-      if SourceReversed.IsSubList(I) then Continue;
-      if SameText(S, LeftStr(SourceReversed[I], Length(S))) then begin
-        Target.AddUnitName(SourceReversed[I]);
-        SourceReversed.Delete(I);
-      end;
-    end;
-  end;
-end;
-
 function TUsesClauseFormatter.IsComment(const Value: string): Boolean;
 begin
   Result := Value.StartsWith('{') or Value.StartsWith('//');
@@ -643,7 +647,7 @@ begin
       FHasComments := True;
       ResolveAliases(UsesList.SubList[I]);
     end
-    else begin
+    else if ModuleUnits.IndexOf(UsesList[I]) < 0 then begin { skip module units }
       idx := FUnitAliases.IndexOfName(UsesList[I]);
       if idx >= 0 then begin
         UsesList[I] := FUnitAliases.ValueFromIndex[idx];
@@ -656,6 +660,11 @@ end;
 procedure TUsesClauseFormatter.SetGroupNames(const Value: string);
 begin
   FGroupNames.DelimitedText := Value;
+end;
+
+procedure TUsesClauseFormatter.SetModuleUnits(const Value: TStrings);
+begin
+  FModuleUnits.Assign(Value);
 end;
 
 procedure TUsesClauseFormatter.SetScopeAliases(const Value: string);

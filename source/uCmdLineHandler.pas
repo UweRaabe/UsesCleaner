@@ -6,7 +6,6 @@ uses
   System.Classes, System.SysUtils;
 
 resourcestring
-  SMayContainWildcards = 'may contain wildcards';
   SUsage = 'usage';
   SConverting = 'converting';
   SCanNotCreateFolder = 'can not create folder';
@@ -43,6 +42,7 @@ type
     FOEMEncoding: TEncoding;
     FOutPath: string;
     FParams: TStringList;
+    FWaitForEnter: Boolean;
     function GetSwitch(const Name: string): Boolean;
     procedure SaveLogFile(const FileName: string);
   protected
@@ -57,12 +57,16 @@ type
     procedure InternalHandleCmdLine; virtual; abstract;
     procedure LogError(const Value: string); virtual;
     procedure LogLine(const Value: string); virtual;
+    function MakeLogProc: TProc<string>;
     procedure PrepareHandler; virtual;
     procedure ShowCmdLine; virtual; abstract;
+    procedure ShowVersion; virtual;
+    function VersionString: string;
   public
     constructor Create; virtual;
     destructor Destroy; override;
     class procedure Execute; virtual;
+    class function NeedsHelp: Boolean; virtual;
     function SwitchValue(const Name: string; const Default: string = ''): string;
     class procedure WaitForKeyPress;
     property LogFileName: string read FLogFileName write FLogFileName;
@@ -71,18 +75,56 @@ type
     property OutPath: string read FOutPath write FOutPath;
     property Params: TStringList read FParams;
     property Switch[const Name: string]: Boolean read GetSwitch;
+    property WaitForEnter: Boolean read FWaitForEnter write FWaitForEnter;
   end;
 
 implementation
 
 uses
-  System.IOUtils, System.Diagnostics;
+  System.IOUtils, System.Diagnostics, Winapi.Windows;
+
+function GetFileVersion(const AFileName: string; var AMajor, AMinor, ARelease, ABuild: Cardinal): Boolean;
+var
+  FileName: string;
+  InfoSize, Wnd: DWORD;
+  VerBuf: Pointer;
+  FI: PVSFixedFileInfo;
+  VerSize: DWORD;
+begin
+  Result := False;
+  // GetFileVersionInfo modifies the filename parameter data while parsing.
+  // Copy the string const into a local variable to create a writeable copy.
+  FileName := AFileName;
+  UniqueString(FileName);
+  InfoSize := GetFileVersionInfoSize(PChar(FileName), Wnd);
+  if InfoSize <> 0 then
+  begin
+    GetMem(VerBuf, InfoSize);
+    try
+      if GetFileVersionInfo(PChar(FileName), Wnd, InfoSize, VerBuf) then
+        if VerQueryValue(VerBuf, '\', Pointer(FI), VerSize) then
+        begin
+          AMajor := HiWord(FI.dwFileVersionMS);
+          AMinor := LoWord(FI.dwFileVersionMS);
+          ARelease := HiWord(FI.dwFileVersionLS);
+          ABuild := LoWord(FI.dwFileVersionLS);
+          Result:= True;
+        end;
+    finally
+      FreeMem(VerBuf);
+    end;
+  end;
+end;
 
 constructor TCmdLineHandler.Create;
 begin
   inherited;
   FOEMEncoding := TMBCSEncoding.Create(850);
   FParams := TStringList.Create();
+
+  {$IFDEF DEBUG}
+  FWaitForEnter := true;
+  {$ENDIF}
 end;
 
 destructor TCmdLineHandler.Destroy;
@@ -118,7 +160,8 @@ var
 begin
   instance := Self.Create;
   try
-    if ParamCount = 0 then
+    instance.ShowVersion;
+    if NeedsHelp then
       instance.ShowCmdLine
     else
       instance.HandleCmdLine;
@@ -183,20 +226,44 @@ procedure TCmdLineHandler.HandleCmdLine;
 var
   sw: TStopwatch;
 begin
-  sw := TStopwatch.StartNew;
-  PrepareHandler;
   try
-    InternalHandleCmdLine;
-  finally
-    FinishHandler;
+    sw := TStopwatch.StartNew;
+    PrepareHandler;
+    try
+      InternalHandleCmdLine;
+    finally
+      FinishHandler;
+    end;
+    LogLine(Format('elapsed time: %d ms', [sw.ElapsedMilliseconds]));
+  except
+    on E: Exception do begin
+      Writeln(E.ClassName, ': ', E.Message);
+    end;
   end;
-  LogLine(Format('elapsed time: %d ms', [sw.ElapsedMilliseconds]));
+  if WaitForEnter then begin
+    Writeln(SPressEnterToContinue);
+    Readln;
+  end;
 end;
 
 procedure TCmdLineHandler.LogError(const Value: string);
 begin
   LogLine('Error: ' + Value);
   WaitForKeyPress;
+end;
+
+function TCmdLineHandler.MakeLogProc: TProc<string>;
+begin
+  Result :=
+    procedure(Arg1: string)
+    begin
+      LogLine(Arg1);
+    end;
+end;
+
+class function TCmdLineHandler.NeedsHelp: Boolean;
+begin
+  Result := (ParamCount = 0) or FindCmdLineSwitch('?') or FindCmdLineSwitch('help');
 end;
 
 procedure TCmdLineHandler.PrepareHandler;
@@ -208,6 +275,10 @@ begin
     S := ParamStr(I);
     if not CharInSet(S[1], SwitchChars) then
       Params.Add(S);
+  end;
+
+  if Switch['p'] then begin
+    WaitForEnter := true;
   end;
 
   if FindCmdLineSwitch('o', S) then
@@ -225,10 +296,32 @@ begin
     FLogs := TStringList.Create;
 end;
 
+procedure TCmdLineHandler.ShowVersion;
+begin
+  Writeln(Format('%s %s', [ExeName, VersionString])
+  {$IFDEF DEBUG}
+    , ' (Debug Version)'
+  {$ENDIF}
+  );
+end;
+
 function TCmdLineHandler.SwitchValue(const Name: string; const Default: string): string;
 begin
   if not FindCmdLineSwitch(Name, result) then
     Result := Default;
+end;
+
+function TCmdLineHandler.VersionString: string;
+var
+  build: Cardinal;
+  major: Cardinal;
+  minor: Cardinal;
+  release: Cardinal;
+begin
+  if GetFileVersion(ParamStr(0), major, minor, release, build) then
+    Result := Format('Version %d.%d.%d.%d', [major, minor, release, build])
+  else
+    Result := '<no version info>';
 end;
 
 class procedure TCmdLineHandler.WaitForKeyPress;
